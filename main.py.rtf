@@ -1,0 +1,1004 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cspthree\c0\c0\c0;}
+\margl1440\margr1440\vieww34360\viewh19120\viewkind0
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f0\fs21\fsmilli10995 \cf2 import numpy as np\
+import matplotlib.pyplot as plt\
+from pynwb import NWBHDF5IO\
+from scipy.stats import ttest\
+rel\
+_\
+from scipy.ndimage import gaussian\
+_\
+import os\
+import argparse\
+filter1d\
+#\
+=====================================================\
+# COMMAND LINE ARGUMENTS / DEFAULT SETTINGS\
+#\
+=====================================================\
+parser\
+=\
+argparse.ArgumentParser(description="Process LFP NWB files and calculate rolling\
+RMS analysis.\
+")\
+parser.add\
+_\
+argument("\
+--file\
+_path"\
+, type=str, default="probe\
+810755803\
+_\
+_\
+lfp.nwb"\
+, help="Path to\
+the NWB file")\
+parser.add\
+_\
+argument("\
+--output\
+dir"\
+_\
+, type=str, default="results"\
+, help="Directory where results\
+will be saved")\
+args\
+=\
+parser.parse\
+_\
+args()\
+file\
+_path\
+base\
+dir\
+_\
+=\
+=\
+args.file\
+_path\
+args.output\
+_\
+dir\
+#\
+=====================================================\
+# OUTPUT FOLDERS\
+#\
+=====================================================\
+stim\
+dir\
+_\
+lfp_\
+dir\
+=\
+rms\
+dir\
+_\
+scatter\
+global\
+_\
+=\
+os.path.join(base\
+dir,\
+"stim\
+vs\
+_\
+_\
+_\
+spont")\
+os.path.join(base\
+dir,\
+_\
+"lfp_\
+analysis")\
+=\
+os.path.join(base\
+dir,\
+_\
+"rolling_\
+rms")\
+dir\
+_\
+dir\
+=\
+os.path.join(base\
+dir,\
+"scatter\
+_\
+_plots")\
+=\
+os.path.join(base\
+dir,\
+_\
+"global\
+_\
+stats")\
+os.makedirs(stim\
+dir, exist\
+_\
+_\
+ok=True)\
+os.makedirs(lfp_\
+dir, exist\
+_\
+ok=True)\
+os.makedirs(rms\
+dir, exist\
+_\
+_\
+ok=True)\
+os.makedirs(scatter\
+dir, exist\
+_\
+_\
+ok=True)\
+os.makedirs(global\
+dir, exist\
+_\
+_\
+ok=True)\
+#\
+=====================================================\
+# LOAD REAL LFP DATA
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 #\
+=====================================================\
+with NWBHDF5IO(file\
+_path,\
+nwbfile\
+=\
+io.read()\
+"r") as io:\
+print("\\nAVAILABLE ACQUISITION KEYS:")\
+print(list(nwbfile.acquisition.keys()))\
+# Dynamic acquisition lookup using the probe key in file or fallback\
+acquisition\
+lfp_\
+key\
+=\
+_\
+keys\
+=\
+list(nwbfile.acquisition.keys())\
+acquisition\
+_\
+keys[0] if acquisition\
+_\
+keys else\
+"probe\
+810755803\
+_\
+_\
+lfp_\
+data"\
+ts\
+=\
+nwbfile.acquisition[lfp_\
+key]\
+# Amount of data analyzed\
+data\
+=\
+ts.data[:120000]\
+if ts.timestamps is not None:\
+time\
+=\
+ts.timestamps[:120000]\
+else:\
+time\
+=\
+np.arange(data.shape[0]) / ts.rate\
+# Convert volts\
+data\
+=\
+data\
+*\
+unit\
+=\
+"\'b5V"\
+->\
+1e6\
+microvolts\
+print("\\nDATA SHAPE:")\
+print(data.shape)\
+#\
+=====================================================\
+# FUNCTIONS\
+#\
+=====================================================\
+def compute\
+_\
+rms(x):\
+return np.sqrt(np.mean(np.square(x)))\
+def rolling_\
+rms(signal, window=12000):\
+rms\
+=\
+np.sqrt(\
+np.convolve(\
+signal**2,\
+np.ones(window) / window,\
+mode='same'\
+)\
+)
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 rms\
+=\
+gaussian\
+return rms\
+_\
+filter1d(rms, sigma=1500)\
+#\
+=====================================================\
+# SEGMENT SETTINGS\
+#\
+=====================================================\
+num\
+_\
+segments\
+segment\
+_\
+length\
+=\
+12\
+=\
+data.shape[0] // num\
+_\
+segments\
+paired\
+control\
+=\
+_\
+paired\
+stim\
+=\
+_\
+[]\
+[]\
+all\
+control\
+rms\
+_\
+_\
+all\
+stim\
+rms\
+=\
+_\
+_\
+electrode\
+ids\
+_\
+=\
+=\
+[]\
+[]\
+[]\
+#\
+=====================================================\
+# LOOP THROUGH ALL ELECTRODES\
+#\
+=====================================================\
+for ch in range(data.shape[1]):\
+signal\
+=\
+data[:, ch]\
+# Skip dead channels\
+if np.std(signal)\
+<\
+0.01:\
+continue\
+electrode\
+_\
+ids.append(ch)\
+#\
+=================================================\
+# SEGMENT DATA\
+#\
+=================================================\
+segments\
+=\
+[\
+signal[i*segment\
+_\
+length:(i+1)*segment\
+_\
+for i in range(num\
+_\
+segments)\
+length]\
+]\
+time\
+_\
+segments\
+=\
+[]\
+for i in range(num\
+_\
+segments):
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 seg_\
+time\
+seg_\
+time\
+time\
+=\
+time[i*segment\
+_\
+length:(i+1)*segment\
+_\
+=\
+seg_\
+time\
+-\
+seg_\
+time[0]\
+_\
+segments.append(seg_\
+time)\
+length]\
+control\
+stim\
+_\
+_\
+segments\
+segments\
+=\
+=\
+segments[:6]\
+segments[6:]\
+control\
+stim\
+times\
+_\
+times\
+=\
+=\
+time\
+time\
+_\
+_\
+_\
+segments[:6]\
+segments[:6]\
+#\
+=================================================\
+# RMS VALUES\
+#\
+=================================================\
+control\
+rms\
+=\
+_\
+np.array([\
+compute\
+_\
+rms(seg)\
+for seg in control\
+_\
+segments\
+])\
+stim\
+rms\
+=\
+_\
+np.array([\
+compute\
+_\
+rms(seg)\
+for seg in stim\
+_\
+segments\
+])\
+ctrl\
+mean\
+=\
+_\
+stim\
+mean\
+=\
+_\
+np.mean(control\
+np.mean(stim\
+_\
+_\
+rms)\
+rms)\
+paired\
+paired\
+_\
+control.append(ctrl\
+_\
+mean)\
+_\
+stim.append(stim\
+_\
+mean)\
+all\
+all\
+control\
+_\
+_\
+rms.extend(control\
+_\
+stim\
+_\
+_\
+rms.extend(stim\
+_\
+rms)\
+rms)\
+#\
+=================================================\
+# T TEST\
+#\
+=================================================\
+t\
+_\
+stat, p_\
+val\
+=\
+ttest\
+_\
+rel(control\
+rms, stim\
+_\
+_\
+rms)\
+#\
+=================================================\
+# RAW LFP GRAPH\
+#\
+=================================================\
+downsample\
+=\
+15
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 plot\
+_\
+plot\
+_\
+signal\
+time\
+=\
+=\
+signal[::downsample]\
+time[::downsample]\
+plt.figure(figsize=(12, 4))\
+plt.plot(\
+plot\
+time,\
+_\
+plot\
+_\
+signal,\
+linewidth=0.4\
+)\
+plt.title(f"Raw LFP Signal\
+-\
+plt.xlabel("Time (s)")\
+plt.ylabel(f"LFP Amplitude (\{unit\})")\
+plt.tight\
+_\
+layout()\
+Electrode \{ch\}")\
+plt.savefig(\
+os.path.join(lfp_\
+dir, f"raw\
+_\
+lfp_\
+electrode\
+_\{ch\}.png"),\
+dpi=300\
+)\
+plt.close()\
+#\
+#\
+=================================================\
+# ROLLING RMS GRAPH\
+=================================================\
+rms\
+=\
+rolling_\
+rms(signal)\
+rms\
+_plot\
+rms\
+time\
+=\
+=\
+_\
+rms[::downsample]\
+time[:len(rms)][::downsample]\
+plt.figure(figsize=(12, 4))\
+plt.plot(\
+rms\
+time,\
+_\
+rms\
+_plot,\
+linewidth=3\
+)\
+plt.title(f"Rolling RMS Envelope\
+-\
+plt.xlabel("Time (s)")\
+plt.ylabel(f"Rolling RMS (\{unit\})")\
+plt.tight\
+_\
+layout()\
+plt.savefig(\
+Electrode \{ch\}")
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 os.path.join(rms\
+dpi=300\
+_\
+dir, f"rolling_\
+rms\
+electrode\
+_\
+_\{ch\}.png"),\
+)\
+plt.close()\
+#\
+=================================================\
+# CLEANER STIM vs SPONT\
+#\
+=================================================\
+plt.figure(figsize=(8, 6))\
+window\
+size\
+_\
+=\
+1000\
+control\
+trace\
+=\
+control\
+_\
+_\
+segments[0][-window\
+_\
+control\
+time\
+=\
+_\
+(\
+control\
+_\
+times[0][-window\
+_\
+size:]\
+-\
+control\
+_\
+times[0][-window\
+_\
+size:][-1]\
+)\
+stim\
+stim\
+_\
+trace\
+time\
+=\
+=\
+stim\
+stim\
+_\
+_\
+segments[0][:window\
+_\
+_\
+times[0][:window\
+_\
+size]\
+size]\
+size:]\
+control\
+stim\
+smooth\
+_\
+smooth\
+=\
+_\
+=\
+gaussian\
+gaussian\
+_\
+filter1d(control\
+_\
+trace, sigma=20)\
+_\
+filter1d(stim\
+_\
+trace, sigma=20)\
+plt.plot(\
+control\
+time,\
+_\
+control\
+smooth,\
+_\
+color='blue'\
+,\
+linewidth=2,\
+label='Spontaneous'\
+)\
+plt.plot(\
+stim\
+time,\
+_\
+stim\
+smooth,\
+_\
+color='darkblue'\
+,\
+linewidth=2,\
+label='Stimulated'\
+)\
+plt.axvline(\
+0,\
+color='black'\
+,
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 linestyle='\
+--\
+'\
+,\
+linewidth=1.5\
+)\
+plt.text(\
+0.02,\
+0.95,\
+f"Spont RMS: \{ctrl\
+f"Stim RMS: \{stim\
+_\
+_\
+mean:.2f\} \{unit\}\\n"\
+mean:.2f\} \{unit\}\\n"\
+f"p\
+=\
+\{p_\
+val:.3e\}"\
+,\
+transform=plt.gca().transAxes,\
+verticalalignment='top'\
+)\
+plt.title(f"Electrode \{ch\}: Stimulated vs Spontaneous")\
+plt.xlabel("Time Relative to Stimulus (s)")\
+plt.ylabel(f"LFP Amplitude (\{unit\})")\
+plt.legend()\
+plt.tight\
+_\
+layout()\
+plt.savefig(\
+os.path.join(stim\
+dpi=300\
+dir, f"stim\
+vs\
+_\
+_\
+_\
+spont\
+electrode\
+_\
+_\{ch\}.png"),\
+)\
+plt.close()\
+#\
+=================================================\
+# ELECTRODE SCATTER\
+#\
+=================================================\
+plt.figure(figsize=(6, 6))\
+jitter1\
+jitter2\
+=\
+=\
+np.random.normal(0, 0.03, len(control\
+_\
+rms))\
+np.random.normal(0, 0.03, len(stim\
+_\
+rms))\
+plt.scatter(\
+0\
++\
+jitter1,\
+control\
+rms,\
+_\
+color='red'\
+,\
+alpha=0.8,\
+s=60,\
+label='Spontaneous'\
+)
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 plt.scatter(\
+1\
++\
+jitter2,\
+stim\
+rms,\
+_\
+color='green'\
+,\
+alpha=0.8,\
+s=60,\
+label='Stimulated'\
+)\
+plt.plot(\
+[0, 1],\
+[ctrl\
+mean, stim\
+_\
+color='black'\
+,\
+linewidth=2\
+_\
+mean],\
+)\
+plt.xticks([0, 1], ["Spontaneous"\
+,\
+plt.ylabel(f"RMS Amplitude (\{unit\})")\
+plt.title(\
+f"Electrode \{ch\}\\n"\
+f"p\
+=\
+\{p_\
+val:.3e\}"\
+"Stimulated"])\
+)\
+plt.legend()\
+plt.tight\
+_\
+layout()\
+plt.savefig(\
+os.path.join(scatter\
+dir, f"scatter\
+electrode\
+_\
+_\
+_\{ch\}.png"),\
+dpi=300\
+)\
+plt.close()\
+#\
+=====================================================\
+# GLOBAL STATS\
+#\
+=====================================================\
+paired\
+paired\
+_\
+control\
+stim\
+=\
+_\
+=\
+np.array(paired\
+np.array(paired\
+_\
+_\
+control)\
+stim)\
+t\
+_\
+stat, p_\
+value\
+=\
+ttest\
+_\
+rel(paired\
+_\
+control, paired\
+_\
+stim)\
+print("\\n==============================")\
+print("GLOBAL RESULTS")\
+print("==============================")
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 print("Spontaneous Mean RMS:"\
+, np.mean(paired\
+_\
+control), unit)\
+print("Stimulated Mean RMS:"\
+, np.mean(paired\
+_\
+stim), unit)\
+print("P-value:"\
+, p_\
+value)\
+if p_\
+value\
+<\
+0.05:\
+print("\\nRESULT: SIGNIFICANT")\
+else:\
+print("\\nRESULT: NOT SIGNIFICANT")\
+#\
+=====================================================\
+# GLOBAL SCATTER\
+#\
+=====================================================\
+plt.figure(figsize=(8, 6))\
+jitter\
+jitter\
+_\
+ctrl\
+stim\
+=\
+=\
+_\
+np.random.normal(0, 0.03, len(paired\
+_\
+np.random.normal(0, 0.03, len(paired\
+_\
+control))\
+stim))\
+plt.scatter(\
+0\
++\
+jitter\
+ctrl,\
+_\
+paired\
+control,\
+_\
+color='red'\
+,\
+s=60,\
+alpha=0.8,\
+label='Spontaneous'\
+)\
+plt.scatter(\
+1\
++\
+jitter\
+stim,\
+_\
+paired\
+stim,\
+_\
+color='green'\
+,\
+s=60,\
+alpha=0.8,\
+label='Stimulated'\
+)\
+for i in range(len(paired\
+_\
+control)):\
+plt.plot(\
+[0, 1],\
+[paired\
+_\
+control[i], paired\
+_\
+color='gray'\
+,\
+alpha=0.25\
+stim[i]],\
+)
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 plt.plot(\
+[0, 1],\
+[np.mean(paired\
+color='black'\
+,\
+linewidth=3\
+_\
+control), np.mean(paired\
+_\
+stim)],\
+)\
+plt.xticks([0, 1], ["Spontaneous"\
+,\
+"Stimulated"])\
+plt.ylabel(f"Mean RMS per Electrode (\{unit\})")\
+plt.title(\
+f"Global RMS Comparison Across Electrodes\\n"\
+\{p_\
+value:.3e\}"\
+f"p\
+=\
+)\
+plt.legend()\
+plt.tight\
+_\
+layout()\
+plt.savefig(\
+os.path.join(global\
+dpi=300\
+dir,\
+_\
+)\
+plt.close()\
+#\
+#\
+"global\
+_\
+scatter.png"),\
+=====================================================\
+# ALL ELECTRODES COMPARISON\
+=====================================================\
+plt.figure(figsize=(14, 6))\
+plt.scatter(\
+electrode\
+ids,\
+_\
+paired\
+control,\
+_\
+color='red'\
+,\
+s=45,\
+alpha=0.8,\
+label='Spontaneous'\
+)\
+plt.scatter(\
+electrode\
+ids,\
+_\
+paired\
+stim,\
+_\
+color='green'\
+,\
+s=45,
+\fs24 \cf0 \page 
+\fs21\fsmilli10995 \cf2 alpha=0.8,\
+label='Stimulated'\
+)\
+for i in range(len(electrode\
+_\
+ids)):\
+plt.plot(\
+[electrode\
+_\
+ids[i], electrode\
+_\
+ids[i]],\
+[paired\
+_\
+control[i], paired\
+_\
+stim[i]],\
+color='gray'\
+,\
+alpha=0.3\
+)\
+plt.xlabel("Electrode Number")\
+plt.ylabel(f"Mean RMS (\{unit\})")\
+plt.title(\
+f"RMS Comparison Across All Electrodes\\n"\
+\{p_\
+value:.3e\}"\
+f"p\
+=\
+)\
+plt.legend()\
+plt.tight\
+_\
+layout()\
+plt.savefig(\
+os.path.join(global\
+dpi=300\
+dir,\
+"all\
+electrodes\
+_\
+_\
+_\
+comparison.png"),\
+)\
+plt.close()\
+print("\\nDONE")\
+print("All graphs saved into:"\
+, base\
+_\
+dir)}
